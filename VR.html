@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dream Villa VR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- A-Frame core -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- A-Frame physics system (ammo.js based) -->
+    <script src="https://cdn.jsdelivr.net/gh/n5ro/aframe-physics-system@v4.0.1/dist/aframe-physics-system.min.js"></script>
+
+    <!-- Custom components & scene setup -->
+    <script src="./main.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #000;
+      }
+    </style>
+
+    <script>
+AFRAME.registerComponent('swing-door', {
+  schema: { side: {type: 'string', default: 'left'} },
+  init: function () {
+    this.isOpen = false;
+    this.el.addEventListener('click', () => {
+      let angle = 0;
+
+      if (!this.isOpen) {
+        angle = (this.data.side === 'left') ? -100 : 100;
+      }
+
+      this.el.setAttribute('animation', {
+        property: 'rotation',
+        to: `0 ${angle} 0`,
+        dur: 800,
+        easing: 'easeInOutQuad'
+      });
+
+      this.isOpen = !this.isOpen;
+    });
+  }
+});
+
+AFRAME.registerComponent('sliding-door', {
+  schema: { 
+    direction: {type: 'string', default: 'right'},
+    distance: {type: 'number', default: 3}
+  },
+  init: function () {
+    this.isDragging = false;
+    this.startPos = { x: 0, y: 0, z: 0 };
+    this.currentOffset = 0;
+    this.maxOffset = this.data.distance;
+    
+    // Store initial position
+    const pos = this.el.object3D.position;
+    this.initialPos = { x: pos.x, y: pos.y, z: pos.z };
+    
+    // Mouse down - start dragging
+    this.el.addEventListener('mousedown', (evt) => {
+      this.isDragging = true;
+      this.startDragX = evt.detail.intersection.point.x;
+      this.startOffset = this.currentOffset;
+    });
+    
+    // Mouse move - update door position
+    this.el.sceneEl.addEventListener('mousemove', (evt) => {
+      if (this.isDragging && evt.detail.intersection) {
+        const currentX = evt.detail.intersection.point.x;
+        const deltaX = currentX - this.startDragX;
+        
+        // Calculate new offset based on direction
+        let newOffset = this.startOffset;
+        if (this.data.direction === 'right') {
+          newOffset = this.startOffset + deltaX;
+        } else if (this.data.direction === 'left') {
+          newOffset = this.startOffset + deltaX;
+        }
+        
+        // Clamp offset between 0 and maxOffset
+        newOffset = Math.max(0, Math.min(this.maxOffset, Math.abs(newOffset)));
+        this.currentOffset = newOffset;
+        
+        // Apply position
+        const sign = this.data.direction === 'right' ? 1 : -1;
+        this.el.object3D.position.x = this.initialPos.x + (sign * newOffset);
+      }
+    });
+    
+    // Mouse up - stop dragging
+    this.el.sceneEl.addEventListener('mouseup', () => {
+      this.isDragging = false;
+    });
+    
+    // Click to toggle (fallback for non-drag interaction)
+    this.el.addEventListener('click', () => {
+      if (!this.isDragging) {
+        const targetOffset = this.currentOffset > this.maxOffset / 2 ? 0 : this.maxOffset;
+        const sign = this.data.direction === 'right' ? 1 : -1;
+        
+        this.el.setAttribute('animation', {
+          property: 'position',
+          to: `${this.initialPos.x + (sign * targetOffset)} ${this.initialPos.y} ${this.initialPos.z}`,
+          dur: 600,
+          easing: 'easeInOutQuad'
+        });
+        
+        this.currentOffset = targetOffset;
+      }
+    });
+  }
+});
+</script>
+  </head>
+  <body>
+    <a-scene
+      renderer="antialias: true; colorManagement: true"
+      physics="debug: false"
+      background="color: #c9e6ff"
+    >
+    <a-camera>
+   <a-cursor></a-cursor>
+    </a-camera>
+
+    <a-assets>
+  <img id="mainDoorTexture" src="door.png" />
+  <img id="wood-texture" src="/mnt/data/625dc9a2-33e5-4291-9b1e-492e45374a10.png">
+    </a-assets>
+      <!-- GLOBAL LIGHTING -->
+      <a-entity light="type: ambient; color: #ffffff; intensity: 0.6"></a-entity>
+      <a-entity
+        light="type: directional; color: #ffffff; intensity: 0.7"
+        position="-1 3 1"
+      ></a-entity>
+
+      <!-- SKY -->
+      <a-sky color="#b3d9ff"></a-sky>
+
+      <!-- ================= GRASS + STONE GROUND LAYER ================= -->
+
+      <!-- Grass Base Layer (entire property) -->
+      <a-plane
+        static-body
+        rotation="-90 0 0"
+        position="0 0.01 0"
+        width="120"
+        height="120"
+        material="color: #5a8f3a; roughness: 1; metalness: 0"
+      ></a-plane>
+
+      <!-- Stone Path from Gate to Villa -->
+      <a-plane
+        rotation="-90 0 0"
+        position="0 0.02 14"
+        width="6"
+        height="12"
+        material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color: #9ca3af; repeat: 3 6; roughness: 1; metalness: 0.1"
+      ></a-plane>
+
+      <!-- Stone Path around Pool (inside fence) -->
+      <a-plane
+        rotation="-90 0 0"
+        position="0 0.02 13"
+        width="16"
+        height="12"
+        material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color: #d1d5db; repeat: 8 6; roughness: 0.95; metalness: 0.05"
+      ></a-plane>
+
+      <!-- VILLA BASE PLATFORM -->
+      <a-box
+        static-body
+        position="0 0.1 0"
+        depth="20"
+        width="24"
+        height="0.2"
+        color="#f5f5f5"
+      ></a-box>
+
+      <!-- FRONT ENTRANCE: PORCH, STEPS, AND DOOR -->
+      <a-entity id="front-entrance">
+        <!-- Porch platform just outside the main doorway -->
+        <a-box
+          static-body
+          position="0 0.12 9"
+          depth="3"
+          width="8"
+          height="0.2"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 4 2; roughness: 0.8; metalness: 0.1"
+          color="#e5e7eb"
+        ></a-box>
+
+        <!-- Textured entrance steps from the garden up to the porch -->
+        <a-box
+          static-body
+          position="0 0.02 9.6"
+          depth="0.8"
+          width="6"
+          height="0.04"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 1; roughness: 0.85; metalness: 0.05"
+          color="#d1d5db"
+        ></a-box>
+        <a-box
+          static-body
+          position="0 0.06 9.2"
+          depth="0.8"
+          width="6"
+          height="0.04"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 1; roughness: 0.85; metalness: 0.05"
+          color="#d1d5db"
+        ></a-box>
+        <a-box
+          static-body
+          position="0 0.1 8.8"
+          depth="0.8"
+          width="6"
+          height="0.04"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 1; roughness: 0.85; metalness: 0.05"
+          color="#d1d5db"
+        ></a-box>
+
+        <!-- Textured welcome mat just in front of the doorway -->
+        <a-plane
+          static-body
+          rotation="-90 0 0"
+          position="0 0.13 8.5"
+          width="2.5"
+          height="1.2"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 1; roughness: 0.9; metalness: 0.02"
+          color="#a16207"
+        ></a-plane>
+
+      </a-entity>
+
+      <!-- Outer house shell: floor, walls and roof -->
+      <a-entity id="villa-shell">
+        <!-- Main interior floor (slightly above platform) -->
+        <a-box
+          static-body
+          position="0 0.12 0"
+          depth="16"
+          width="22"
+          height="0.22"
+          color="#e5dfd4"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 6 4; metalness: 0.1; roughness: 0.8"
+        ></a-box>
+
+        <!-- Back wall -->
+        <a-box
+          static-body
+          position="0 2 -8"
+          depth="0.2"
+          width="22"
+          height="4"
+          color="#9ca3af"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 6 3; roughness: 0.8; metalness: 0.1"
+        ></a-box>
+
+        <!-- Left wall -->
+        <a-box
+          static-body
+          position="-11 2 0"
+          depth="16"
+          width="0.2"
+          height="4"
+          color="#9ca3af"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 5 3; roughness: 0.8; metalness: 0.1"
+        ></a-box>
+
+        <!-- Right wall -->
+        <a-box
+          static-body
+          position="11 2 0"
+          depth="16"
+          width="0.2"
+          height="4"
+          color="#9ca3af"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 5 3; roughness: 0.8; metalness: 0.1"
+        ></a-box>
+
+        <!-- Front wall split to leave a large doorway (entry hall) -->
+        <!-- Left front segment -->
+        <a-box
+          static-body
+          position="-8 2 8"
+          depth="0.2"
+          width="6"
+          height="4"
+          color="#9ca3af"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 3 2; roughness: 0.8; metalness: 0.1"
+        ></a-box>
+        <!-- Right front segment -->
+        <a-box
+          static-body
+          position="8 2 8"
+          depth="0.2"
+          width="6"
+          height="4"
+          color="#9ca3af"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 3 2; roughness: 0.8; metalness: 0.1"
+        ></a-box>
+
+        <!-- Simple roof -->
+        <a-box
+          position="0 4.2 0"
+          depth="16.5"
+          width="22.5"
+          height="0.3"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 4 3; metalness: 0.2; roughness: 0.5"
+        ></a-box>
+      </a-entity>
+
+      <!-- ========== VILLA STRUCTURE / ROOMS ========== -->
+      <!-- LIVING ROOM (front-left) -->
+      <a-entity id="living-room" position="-6 0 2">
+        <!-- Floor -->
+        <a-box
+          static-body
+          position="0 0.1 0"
+          depth="8"
+          width="8"
+          height="0.2"
+          color="#f2ede3"
+        ></a-box>
+
+        <!-- Walls with soft textured finish -->
+        <!-- Back wall -->
+        <a-box
+          static-body
+          position="0 2 -4"
+          depth="0.2"
+          width="8"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 3 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+        <!-- Left wall -->
+        <a-box
+          static-body
+          position="-4 2 0"
+          depth="8"
+          width="0.2"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+        <!-- Right wall (half, to open to garden) -->
+        <a-box
+          static-body
+          position="4 2 -1.5"
+          depth="5"
+          width="0.2"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+
+        <!-- Sofa -->
+        <a-box
+          position="-1 0.6 1"
+          depth="2"
+          width="3"
+          height="0.6"
+          color="#c9b39c"
+        ></a-box>
+        <a-box
+          position="-1 1.1 1.6"
+          depth="1"
+          width="3"
+          height="0.6"
+          color="#d8c5ae"
+        ></a-box>
+
+        <!-- Coffee table -->
+        <a-box
+          position="1.5 0.4 0.5"
+          depth="1.2"
+          width="2"
+          height="0.3"
+          color="#a07b50"
+        ></a-box>
+
+        <!-- TV console and TV -->
+        <a-box
+          position="0 0.6 -3.2"
+          depth="0.6"
+          width="3.5"
+          height="0.5"
+          color="#b7b7b7"
+        ></a-box>
+        <a-plane
+          position="0 1.8 -3.1"
+          width="3"
+          height="1.7"
+          color="#111827"
+        ></a-plane>
+
+        <!-- Wall art -->
+        <a-plane
+          position="-3.6 2.4 -1"
+          rotation="0 90 0"
+          width="2"
+          height="1.2"
+          material="color: #fbbf24"
+          animation="property: material.color; dir: alternate; to: #f97316; dur: 5000; loop: true; easing: easeInOutSine"
+        ></a-plane>
+
+        <!-- Ceiling light -->
+        <a-entity position="0 3.6 0">
+          <a-sphere
+            radius="0.2"
+            color="#fef9c3"
+            material="emissive: #fbbf24; emissiveIntensity: 0.8"
+          ></a-sphere>
+          <a-entity
+            light="type: point; color: #fff7cc; intensity: 0.6; distance: 10"
+          ></a-entity>
+        </a-entity>
+
+        <!-- Ceiling fan -->
+        <a-entity position="0 3.4 0">
+          <a-cylinder radius="0.06" height="0.4" color="#374151"></a-cylinder>
+          <a-entity
+            id="fan-blades"
+            rotation="0 0 0"
+            animation="property: rotation; to: 0 360 0; loop: true; dur: 2500; easing: linear"
+          >
+            <a-box position="0.8 0 0" depth="0.1" width="1.6" height="0.05" color="#9ca3af"></a-box>
+            <a-box position="-0.8 0 0" depth="0.1" width="1.6" height="0.05" color="#9ca3af"></a-box>
+            <a-box position="0 0 0.8" depth="1.6" width="0.1" height="0.05" color="#9ca3af"></a-box>
+            <a-box position="0 0 -0.8" depth="1.6" width="0.1" height="0.05" color="#9ca3af"></a-box>
+          </a-entity>
+        </a-entity>
+      </a-entity>
+
+      <!-- BEDROOM (back-center) -->
+      <a-entity id="bedroom" position="3.5 0 -4">
+        <!-- Floor -->
+        <a-box
+          static-body
+          position="0 0.1 0"
+          depth="7"
+          width="8"
+          height="0.2"
+          color="#f7f1ff"
+        ></a-box>
+
+        <!-- Walls with warm textured finish -->
+        <a-box
+          static-body
+          position="0 2 -3.5"
+          depth="0.2"
+          width="8"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 3 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+        <a-box
+          static-body
+          position="-4 2 0"
+          depth="7"
+          width="0.2"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+        <a-box
+          static-body
+          position="4 2 0"
+          depth="7"
+          width="0.2"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+        <!-- Partial front wall with door opening -->
+        <a-box
+          static-body
+          position="-1.8 2 3.5"
+          depth="0.2"
+          width="4.4"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+
+        <!-- Bed -->
+        <a-box
+          position="0 0.6 0"
+          depth="3"
+          width="4"
+          height="0.6"
+          color="#e5e7eb"
+        ></a-box>
+        <a-box
+          position="0 0.9 -0.4"
+          depth="1"
+          width="4"
+          height="0.6"
+          color="#f97373"
+        ></a-box>
+        <a-box
+          position="0 1.4 -1.6"
+          depth="0.3"
+          width="4"
+          height="1"
+          color="#111827"
+        ></a-box>
+
+        <!-- Night stands -->
+        <a-box
+          position="-2.3 0.6 0.7"
+          depth="0.8"
+          width="0.8"
+          height="0.8"
+          color="#d1d5db"
+        ></a-box>
+        <a-box
+          position="2.3 0.6 0.7"
+          depth="0.8"
+          width="0.8"
+          height="0.8"
+          color="#d1d5db"
+        ></a-box>
+
+        <!-- Bedside lamps -->
+        <a-entity position="-2.3 1.3 0.7">
+          <a-cylinder radius="0.1" height="0.3" color="#6b7280"></a-cylinder>
+          <a-cone
+            radius-bottom="0.3"
+            radius-top="0.05"
+            height="0.5"
+            color="#facc15"
+            material="emissive: #facc15; emissiveIntensity: 0.3"
+          ></a-cone>
+          <a-entity
+            light="type: point; color: #fee9a6; intensity: 0.5; distance: 6"
+          ></a-entity>
+        </a-entity>
+        <a-entity position="2.3 1.3 0.7">
+          <a-cylinder radius="0.1" height="0.3" color="#6b7280"></a-cylinder>
+          <a-cone
+            radius-bottom="0.3"
+            radius-top="0.05"
+            height="0.5"
+            color="#facc15"
+            material="emissive: #facc15; emissiveIntensity: 0.3"
+          ></a-cone>
+          <a-entity
+            light="type: point; color: #fee9a6; intensity: 0.5; distance: 6"
+          ></a-entity>
+        </a-entity>
+
+        <!-- Wardrobe -->
+        <a-box
+          position="-3.5 1.8 -1.5"
+          depth="1.5"
+          width="1.4"
+          height="3.3"
+          color="#e5e7eb"
+        ></a-box>
+
+        <!-- Bedroom painting -->
+        <a-plane
+          position="3.5 2.2 -1.5"
+          rotation="0 -90 0"
+          width="2"
+          height="1.2"
+          material="color: #38bdf8"
+          animation="property: material.color; dir: alternate; to: #6366f1; dur: 6000; loop: true; easing: easeInOutSine"
+        ></a-plane>
+      </a-entity>
+
+      <!-- KITCHEN (front-right) -->
+      <a-entity id="kitchen" position="6 0 3">
+        <!-- Floor -->
+        <a-box
+          static-body
+          position="0 0.1 0"
+          depth="7"
+          width="7"
+          height="0.2"
+          color="#e5e7eb"
+        ></a-box>
+
+        <!-- Walls with subtle texture -->
+        <a-box
+          static-body
+          position="0 2 -3.5"
+          depth="0.2"
+          width="7"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 3 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+        <a-box
+          static-body
+          position="-3.5 2 0"
+          depth="7"
+          width="0.2"
+          height="4"
+          color="#e5e7eb"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 2 2; roughness: 0.85; metalness: 0.05"
+        ></a-box>
+
+        <!-- Kitchen counter -->
+        <a-box
+          position="0 1 -2.4"
+          depth="2"
+          width="6"
+          height="1.2"
+          color="#d1d5db"
+        ></a-box>
+        <!-- Cabinets -->
+        <a-box
+          position="0 2.4 -2.6"
+          depth="0.6"
+          width="6"
+          height="1.2"
+          color="#e5e7eb"
+        ></a-box>
+
+        <!-- Kitchen island -->
+        <a-box
+          position="0 1 0.5"
+          depth="1.8"
+          width="3"
+          height="1"
+          color="#f3f4f6"
+        ></a-box>
+
+        <!-- Cooking utensils on counter and island -->
+        <!-- Pot on the stove area -->
+        <a-entity position="-1.8 1.7 -2.1">
+          <a-cylinder radius="0.25" height="0.25" color="#6b7280"></a-cylinder>
+          <a-cylinder
+            radius="0.28"
+            height="0.05"
+            position="0 0.15 0"
+            color="#9ca3af"
+          ></a-cylinder>
+          <a-torus
+            radius="0.35"
+            radius-tubular="0.03"
+            rotation="90 0 0"
+            color="#4b5563"
+          ></a-torus>
+        </a-entity>
+
+        <!-- Pan on the island -->
+        <a-entity position="0.6 1.6 0.3">
+          <a-cylinder radius="0.2" height="0.08" color="#111827"></a-cylinder>
+          <a-box
+            position="0.3 0 0"
+            depth="0.06"
+            width="0.4"
+            height="0.06"
+            color="#374151"
+          ></a-box>
+        </a-entity>
+
+        <!-- Utensil holder with spoons -->
+        <a-entity position="1.8 1.7 -2">
+          <a-cylinder radius="0.18" height="0.3" color="#e5e7eb"></a-cylinder>
+          <a-box
+            position="-0.05 0.2 0"
+            depth="0.02"
+            width="0.05"
+            height="0.35"
+            color="#9ca3af"
+          ></a-box>
+          <a-box
+            position="0.05 0.22 0"
+            depth="0.02"
+            width="0.05"
+            height="0.35"
+            color="#9ca3af"
+          ></a-box>
+        </a-entity>
+
+        <!-- Bar stools -->
+        <a-entity position="-1 0 1.6">
+          <a-cylinder radius="0.15" height="0.8" color="#9ca3af"></a-cylinder>
+          <a-cylinder
+            radius="0.4"
+            height="0.2"
+            position="0 0.5 0"
+            color="#6b7280"
+          ></a-cylinder>
+        </a-entity>
+        <a-entity position="1 0 1.6">
+          <a-cylinder radius="0.15" height="0.8" color="#9ca3af"></a-cylinder>
+          <a-cylinder
+            radius="0.4"
+            height="0.2"
+            position="0 0.5 0"
+            color="#6b7280"
+          ></a-cylinder>
+        </a-entity>
+
+        <!-- Hanging lights -->
+        <a-entity position="-1.2 3 0.3">
+          <a-cylinder radius="0.05" height="0.6" color="#4b5563"></a-cylinder>
+          <a-sphere
+            position="0 -0.5 0"
+            radius="0.2"
+            color="#fee2b3"
+            material="emissive: #fed7aa; emissiveIntensity: 0.7"
+          ></a-sphere>
+          <a-entity
+            light="type: point; color: #fee2b3; intensity: 0.5; distance: 7"
+          ></a-entity>
+        </a-entity>
+        <a-entity position="1.2 3 0.3">
+          <a-cylinder radius="0.05" height="0.6" color="#4b5563"></a-cylinder>
+          <a-sphere
+            position="0 -0.5 0"
+            radius="0.2"
+            color="#fee2b3"
+            material="emissive: #fed7aa; emissiveIntensity: 0.7"
+          ></a-sphere>
+          <a-entity
+            light="type: point; color: #fee2b3; intensity: 0.5; distance: 7"
+          ></a-entity>
+        </a-entity>
+      </a-entity>
+
+      <!-- CENTRAL STAIRS AND UPPER MEZZANINE -->
+      <a-entity id="stairs-and-mezzanine" position="0 0 -1">
+        <!-- Stair steps -->
+        <a-box position="2 0.25 3" depth="1" width="2" height="0.3" color="#e5e7eb"></a-box>
+        <a-box position="2 0.5 2.6" depth="1" width="2" height="0.3" color="#e5e7eb"></a-box>
+        <a-box position="2 0.75 2.2" depth="1" width="2" height="0.3" color="#e5e7eb"></a-box>
+        <a-box position="2 1 1.8" depth="1" width="2" height="0.3" color="#e5e7eb"></a-box>
+        <a-box position="2 1.25 1.4" depth="1" width="2" height="0.3" color="#e5e7eb"></a-box>
+        <a-box position="2 1.5 1" depth="1" width="2" height="0.3" color="#e5e7eb"></a-box>
+        <a-box position="2 1.75 0.6" depth="1" width="2" height="0.3" color="#e5e7eb"></a-box>
+
+        <!-- Upper mezzanine floor -->
+        <a-box
+          static-body
+          position="2 2.1 -1"
+          depth="6"
+          width="6"
+          height="0.25"
+          color="#ede9fe"
+        ></a-box>
+
+        <!-- Simple railing -->
+        <a-box position="5 2.5 -1" depth="6" width="0.1" height="0.7" color="#9ca3af"></a-box>
+
+        <!-- Lounge furniture upstairs -->
+        <a-box
+          position="1 2.5 -2"
+          depth="1.5"
+          width="2.4"
+          height="0.5"
+          color="#fecaca"
+        ></a-box>
+        <a-box
+          position="1 2.9 -2.3"
+          depth="0.3"
+          width="2.4"
+          height="0.7"
+          color="#f97373"
+        ></a-box>
+        <a-box
+          position="3.2 2.35 -1"
+          depth="1"
+          width="1.4"
+          height="0.4"
+          color="#e5e7eb"
+        ></a-box>
+      </a-entity>
+
+      <!-- ========== SWIMMING POOL AREA (INSIDE FENCE) ========== -->
+      <a-entity id="pool-area" position="0 0 13">
+        <!-- Pool outer rim/deck -->
+        <a-box
+          static-body
+          position="0 0.15 0"
+          depth="8.5"
+          width="12.5"
+          height="0.3"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color: #d1d5db; repeat: 6 4; roughness: 0.8; metalness: 0.2"
+        ></a-box>
+
+        <!-- Pool interior walls (light blue tiles) -->
+        <!-- Bottom -->
+        <a-box
+          position="0 -0.3 0"
+          depth="7.5"
+          width="11.5"
+          height="0.1"
+          material="color: #bfdbfe; roughness: 0.2; metalness: 0.3"
+        ></a-box>
+        
+        <!-- Side walls -->
+        <a-box
+          position="0 0.1 3.75"
+          depth="0.1"
+          width="11.5"
+          height="1"
+          material="color: #bfdbfe; roughness: 0.2; metalness: 0.3"
+        ></a-box>
+        <a-box
+          position="0 0.1 -3.75"
+          depth="0.1"
+          width="11.5"
+          height="1"
+          material="color: #bfdbfe; roughness: 0.2; metalness: 0.3"
+        ></a-box>
+        <a-box
+          position="5.75 0.1 0"
+          depth="7.5"
+          width="0.1"
+          height="1"
+          material="color: #bfdbfe; roughness: 0.2; metalness: 0.3"
+        ></a-box>
+        <a-box
+          position="-5.75 0.1 0"
+          depth="7.5"
+          width="0.1"
+          height="1"
+          material="color: #bfdbfe; roughness: 0.2; metalness: 0.3"
+        ></a-box>
+
+        <!-- Water surface with realistic appearance -->
+        <a-plane
+          id="pool-water"
+          rotation="-90 0 0"
+          position="0 0.55 0"
+          width="11"
+          height="7"
+          material="color: #3b82f6; opacity: 0.75; transparent: true; metalness: 0.8; roughness: 0.1"
+          animation="property: material.color; dir: alternate; from: #3b82f6; to: #60a5fa; dur: 3000; loop: true; easing: easeInOutSine"
+        ></a-plane>
+
+        <!-- Pool steps (left side) -->
+        <a-box
+          position="-4.8 0.45 2.5"
+          depth="1.2"
+          width="1.8"
+          height="0.2"
+          material="color: #e0f2fe; roughness: 0.3; metalness: 0.2"
+        ></a-box>
+        <a-box
+          position="-4.8 0.25 2"
+          depth="1.2"
+          width="1.8"
+          height="0.2"
+          material="color: #e0f2fe; roughness: 0.3; metalness: 0.2"
+        ></a-box>
+        <a-box
+          position="-4.8 0.05 1.5"
+          depth="1.2"
+          width="1.8"
+          height="0.2"
+          material="color: #e0f2fe; roughness: 0.3; metalness: 0.2"
+        ></a-box>
+
+        <!-- Pool lights (underwater effect) -->
+        <a-entity position="-4 0.4 -2">
+          <a-sphere 
+            radius="0.15" 
+            material="color: #bfdbfe; emissive: #60a5fa; emissiveIntensity: 0.8"
+          ></a-sphere>
+          <a-entity
+            light="type: point; color: #60a5fa; intensity: 0.6; distance: 8"
+          ></a-entity>
+        </a-entity>
+        
+        <a-entity position="4 0.4 -2">
+          <a-sphere 
+            radius="0.15" 
+            material="color: #bfdbfe; emissive: #60a5fa; emissiveIntensity: 0.8"
+          ></a-sphere>
+          <a-entity
+            light="type: point; color: #60a5fa; intensity: 0.6; distance: 8"
+          ></a-entity>
+        </a-entity>
+
+        <!-- Pool lane lines -->
+        <a-box
+          position="0 0.56 0"
+          depth="6.5"
+          width="0.15"
+          height="0.02"
+          rotation="-90 0 0"
+          material="color: #1e3a8a; opacity: 0.6"
+        ></a-box>
+
+        <!-- Floating pool items -->
+        <a-sphere
+          position="2 0.8 1"
+          radius="0.4"
+          material="color: #f97316; roughness: 0.4"
+          animation="property: position; dir: alternate; from: 2 0.8 1; to: 2.2 0.85 0.8; dur: 2000; loop: true; easing: easeInOutSine"
+        ></a-sphere>
+        
+        <a-torus
+          position="-2 0.7 -1"
+          radius="0.5"
+          radius-tubular="0.15"
+          material="color: #facc15; roughness: 0.5"
+          rotation="-90 20 0"
+          animation="property: rotation; from: -90 20 0; to: -90 40 0; dir: alternate; dur: 2500; loop: true; easing: easeInOutSine"
+        ></a-torus>
+
+        <!-- Pool furniture - Sun loungers -->
+        <a-entity position="-7 0.3 2">
+          <!-- Lounger frame -->
+          <a-box position="0 0 0" width="0.8" height="0.1" depth="2" color="#e5e7eb"></a-box>
+          <a-box position="0 0.3 -0.6" width="0.8" height="0.1" depth="0.8" 
+                 rotation="-30 0 0" color="#3b82f6"></a-box>
+        </a-entity>
+
+        <a-entity position="-7 0.3 -2">
+          <!-- Lounger frame -->
+          <a-box position="0 0 0" width="0.8" height="0.1" depth="2" color="#e5e7eb"></a-box>
+          <a-box position="0 0.3 -0.6" width="0.8" height="0.1" depth="0.8" 
+                 rotation="-30 0 0" color="#3b82f6"></a-box>
+        </a-entity>
+
+        <!-- Patio umbrella -->
+<a-entity position="7 0 0">
+  
+  <!-- Pole -->
+  <a-cylinder 
+      position="0 1.25 0"
+      radius="0.08" 
+      height="2.5" 
+      color="#9ca3af">
+  </a-cylinder>
+
+  <!-- Umbrella -->
+  <a-cone 
+      position="0 2.1 0"
+      radius-bottom="2" 
+      radius-top="0.2" 
+      height="1.2" 
+      color="#dc2626">
+  </a-cone>
+
+</a-entity>
+</a-entity>
+
+
+      <!-- ========== GARDEN DECOR / EXTRA MODELS ========== -->
+      <!-- Trees: four at the outer corners around the house, off the main lawn -->
+      <a-entity id="trees">
+        <!-- Front-left corner tree -->
+        <a-entity position="-16 0 12">
+          <a-cylinder
+            static-body
+            radius="0.3"
+            height="2.4"
+            color="#8b5a2b"
+          ></a-cylinder>
+          <a-sphere position="0 2 0" radius="1.6" color="#166534"></a-sphere>
+        </a-entity>
+
+        <!-- Front-right corner tree -->
+        <a-entity position="16 0 12">
+          <a-cylinder
+            static-body
+            radius="0.3"
+            height="2.4"
+            color="#8b5a2b"
+          ></a-cylinder>
+          <a-sphere position="0 2 0" radius="1.6" color="#16a34a"></a-sphere>
+        </a-entity>
+
+        <!-- Back-left corner tree -->
+        <a-entity position="-16 0 -10">
+          <a-cylinder
+            static-body
+            radius="0.3"
+            height="2.4"
+            color="#7c4a21"
+          ></a-cylinder>
+          <a-sphere position="0 2 0" radius="1.6" color="#15803d"></a-sphere>
+        </a-entity>
+
+        <!-- Back-right corner tree -->
+        <a-entity position="16 0 -10">
+          <a-cylinder
+            static-body
+            radius="0.3"
+            height="2.4"
+            color="#7c4a21"
+          ></a-cylinder>
+          <a-sphere position="0 2 0" radius="1.6" color="#16a34a"></a-sphere>
+        </a-entity>
+      </a-entity>
+
+      <!-- GYM at the back of the house -->
+      <a-entity id="gym" position="0 0 -13">
+        <!-- Gym floor -->
+        <a-box
+          static-body
+          position="0 0.1 0"
+          depth="6"
+          width="8"
+          height="0.2"
+          color="#111827"
+          material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); repeat: 3 2; metalness: 0.2; roughness: 0.4"
+        ></a-box>
+        <!-- Simple glassy walls -->
+        <a-box
+          static-body
+          position="0 2 -3"
+          depth="0.1"
+          width="8"
+          height="4"
+          color="#e5e7eb"
+          material="opacity: 0.7; transparent: true; color: #e5f2ff"
+        ></a-box>
+        <a-box
+          static-body
+          position="-4 2 0"
+          depth="6"
+          width="0.1"
+          height="4"
+          color="#e5e7eb"
+          material="opacity: 0.7; transparent: true; color: #e5f2ff"
+        ></a-box>
+        <a-box
+          static-body
+          position="4 2 0"
+          depth="6"
+          width="0.1"
+          height="4"
+          color="#e5e7eb"
+          material="opacity: 0.7; transparent: true; color: #e5f2ff"
+        ></a-box>
+
+        <!-- Treadmill -->
+        <a-entity position="-2 0 0">
+          <a-box position="0 0.35 0" depth="2" width="1" height="0.2" color="#4b5563"></a-box>
+          <a-box position="0 0.9 -0.8" depth="0.4" width="1" height="0.6" color="#6b7280"></a-box>
+          <a-cylinder position="-0.4 0.25 0.8" radius="0.12" height="0.9" rotation="0 0 90" color="#111827"></a-cylinder>
+          <a-cylinder position="0.4 0.25 0.8" radius="0.12" height="0.9" rotation="0 0 90" color="#111827"></a-cylinder>
+        </a-entity>
+
+        <!-- Dumbbell rack -->
+        <a-entity position="2 0 0.5">
+          <a-box position="0 0.4 0" depth="1.2" width="0.2" height="0.8" color="#4b5563"></a-box>
+          <a-box position="0 0.6 0" depth="1.2" width="0.1" height="0.1" color="#6b7280"></a-box>
+          <!-- Dumbbells -->
+          <a-entity position="0 0.6 -0.4">
+            <a-cylinder radius="0.06" height="0.4" rotation="0 90 0" color="#9ca3af"></a-cylinder>
+            <a-cylinder position="-0.2 0 0" radius="0.11" height="0.08" rotation="0 90 0" color="#6b7280"></a-cylinder>
+            <a-cylinder position="0.2 0 0" radius="0.11" height="0.08" rotation="0 90 0" color="#6b7280"></a-cylinder>
+          </a-entity>
+          <a-entity position="0 0.6 0">
+            <a-cylinder radius="0.06" height="0.4" rotation="0 90 0" color="#9ca3af"></a-cylinder>
+            <a-cylinder position="-0.2 0 0" radius="0.11" height="0.08" rotation="0 90 0" color="#6b7280"></a-cylinder>
+            <a-cylinder position="0.2 0 0" radius="0.11" height="0.08" rotation="0 90 0" color="#6b7280"></a-cylinder>
+          </a-entity>
+        </a-entity>
+
+        <!-- Yoga mat -->
+        <a-box position="0 0.12 -1" depth="2" width="0.8" height="0.05" color="#22c55e"></a-box>
+
+        <!-- Gym light -->
+        <a-entity position="0 3 0">
+          <a-sphere radius="0.2" color="#bfdbfe" material="emissive: #bfdbfe; emissiveIntensity: 0.8"></a-sphere>
+          <a-entity light="type: point; color: #bfdbfe; intensity: 0.7; distance: 10"></a-entity>
+        </a-entity>
+      </a-entity>
+
+      <!-- Decorative plants -->
+      <a-entity id="plants">
+        <a-entity position="-4 0 6">
+          <a-cylinder radius="0.2" height="0.6" color="#6b7280"></a-cylinder>
+          <a-cone
+            position="0 0.6 0"
+            radius-bottom="0.6"
+            radius-top="0.1"
+            height="1"
+            color="#16a34a"
+          ></a-cone>
+        </a-entity>
+        <a-entity position="4 0 6">
+          <a-cylinder radius="0.2" height="0.6" color="#6b7280"></a-cylinder>
+          <a-cone
+            position="0 0.6 0"
+            radius-bottom="0.6"
+            radius-top="0.1"
+            height="1"
+            color="#16a34a"
+          ></a-cone>
+        </a-entity>
+      </a-entity>
+
+      <!-- Car (simple low-poly) -->
+      <a-entity id="car" position="10 0 6" car-bob>
+        <a-box
+          static-body
+          position="0 0.7 0"
+          depth="3"
+          width="2.4"
+          height="0.8"
+          color="#0ea5e9"
+        ></a-box>
+        <a-box
+          position="0 1.3 -0.2"
+          depth="1.6"
+          width="2"
+          height="0.7"
+          color="#e5e7eb"
+        ></a-box>
+        <!-- Wheels -->
+        <a-cylinder
+          position="-1 0.4 1.1"
+          rotation="90 0 0"
+          radius="0.45"
+          height="0.4"
+          color="#111827"
+        ></a-cylinder>
+        <a-cylinder
+          position="1 0.4 1.1"
+          rotation="90 0 0"
+          radius="0.45"
+          height="0.4"
+          color="#111827"
+        ></a-cylinder>
+        <a-cylinder
+          position="-1 0.4 -1.1"
+          rotation="90 0 0"
+          radius="0.45"
+          height="0.4"
+          color="#111827"
+        ></a-cylinder>
+        <a-cylinder
+          position="1 0.4 -1.1"
+          rotation="90 0 0"
+          radius="0.45"
+          height="0.4"
+          color="#111827"
+        ></a-cylinder>
+        <!-- Headlights -->
+        <a-sphere
+          position="-0.7 0.8 1.6"
+          radius="0.12"
+          color="#fef3c7"
+          material="emissive: #fcd34d; emissiveIntensity: 1"
+        ></a-sphere>
+        <a-sphere
+          position="0.7 0.8 1.6"
+          radius="0.12"
+          color="#fef3c7"
+          material="emissive: #fcd34d; emissiveIntensity: 1"
+        ></a-sphere>
+        <a-entity
+          light="type: spot; color: #fef9c3; intensity: 0.4; distance: 10; angle: 20"
+          position="0 0.9 1.8"
+          rotation="-5 0 0"
+        ></a-entity>
+      </a-entity>
+
+      <!-- Pet dog (stylized) with idle animation -->
+      <a-entity id="dog" position="-2 0 5">
+        <a-box position="0 0.4 0" depth="1.2" width="0.6" height="0.6" color="#92400e"></a-box>
+        <a-box position="0 0.9 -0.5" depth="0.6" width="0.5" height="0.4" color="#b45309"></a-box>
+        <a-sphere position="0 1 -0.8" radius="0.25" color="#92400e"></a-sphere>
+        <!-- Legs -->
+        <a-cylinder position="-0.2 0.15 0.3" radius="0.06" height="0.3" color="#7c2d12"></a-cylinder>
+        <a-cylinder position="0.2 0.15 0.3" radius="0.06" height="0.3" color="#7c2d12"></a-cylinder>
+        <a-cylinder position="-0.2 0.15 -0.3" radius="0.06" height="0.3" color="#7c2d12"></a-cylinder>
+        <a-cylinder position="0.2 0.15 -0.3" radius="0.06" height="0.3" color="#7c2d12"></a-cylinder>
+        <!-- Tail -->
+        <a-box
+          position="0 0.8 0.6"
+          depth="0.4"
+          width="0.08"
+          height="0.08"
+          color="#b45309"
+          animation="property: rotation; from: -20 0 0; to: 20 0 0; dir: alternate; dur: 400; loop: true; easing: easeInOutSine"
+        ></a-box>
+        <!-- Idle breathing -->
+        <a-animation
+          attribute="position"
+          from="-2 0 5"
+          to="-2 0.05 5"
+          dur="1500"
+          direction="alternate"
+          repeat="indefinite"
+        ></a-animation>
+      </a-entity>
+
+      <!-- ========== PLAYER / CAMERA RIG ========== -->
+      <a-entity
+        id="rig"
+        position="0 0 2"
+        movement-controls="fly: false; speed: 4"
+      >
+        <a-entity
+          id="camera"
+          camera
+          wasd-controls="acceleration: 25"
+          look-controls="pointerLockEnabled: true"
+          position="0 1.6 0"
+        >
+          <!-- Cursor for gaze / click and drag interaction -->
+          <a-entity
+            cursor="rayOrigin: mouse; fuse: false"
+            raycaster="objects: .interactable; far: 50"
+          ></a-entity>
+        </a-entity>
+      </a-entity>
+
+      <!-- OPTIONAL: Teleport pads for intuitive movement -->
+      <a-entity id="teleports">
+        <a-cylinder
+          class="interactable"
+          teleport-pad="target: -6 0 2"
+          position="-3 0.05 0"
+          radius="0.4"
+          height="0.1"
+          color="#22c55e"
+          material="opacity: 0.85"
+          animation="property: scale; dir: alternate; to: 1.1 1 1.1; dur: 800; loop: true; easing: easeInOutSine"
+        ></a-cylinder>
+        <a-cylinder
+          class="interactable"
+          teleport-pad="target: 3.5 0 -4"
+          position="1 0.05 -2"
+          radius="0.4"
+          height="0.1"
+          color="#3b82f6"
+          material="opacity: 0.85"
+          animation="property: scale; dir: alternate; to: 1.1 1 1.1; dur: 800; loop: true; easing: easeInOutSine"
+        ></a-cylinder>
+        <a-cylinder
+          class="interactable"
+          teleport-pad="target: 6 0 3"
+          position="4 0.05 1"
+          radius="0.4"
+          height="0.1"
+          color="#a855f7"
+          material="opacity: 0.85"
+          animation="property: scale; dir: alternate; to: 1.1 1 1.1; dur: 800; loop: true; easing: easeInOutSine"
+        ></a-cylinder>
+        <a-cylinder
+          class="interactable"
+          teleport-pad="target: 0 0 13"
+          position="0 0.05 6"
+          radius="0.4"
+          height="0.1"
+          color="#f97316"
+          material="opacity: 0.85"
+          animation="property: scale; dir: alternate; to: 1.1 1 1.1; dur: 800; loop: true; easing: easeInOutSine"
+        ></a-cylinder>
+      </a-entity>
+
+      <!-- Bedroom Door (adjusted to fit the opening between bedroom and hallway) -->
+      <a-plane
+        position="1.8 2 -0.45"
+        width="1.5"
+        height="3"
+        rotation="0 0 0"
+        material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color: #8b5a2b; roughness: 0.9; metalness: 0.1"
+      ></a-plane>
+
+      <!-- Kitchen Door (adjusted to fit the opening to kitchen) -->
+      <a-plane
+        position="2.5 2 3"
+        width="1.5"
+        height="3"
+        rotation="0 90 0"
+        material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color: #8b5a2b; roughness: 0.9; metalness: 0.1"
+      ></a-plane>
+
+      <!-- Living Room Garden Opening Door (adjusted for the opening to garden) -->
+      <a-plane
+        position="-2 2 1"
+        width="2"
+        height="3"
+        rotation="0 90 0"
+        material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color: #8b5a2b; roughness: 0.9; metalness: 0.1"
+      ></a-plane>
+
+
+      <!-- ================= WOODEN FENCE AROUND PROPERTY ================= -->
+     <a-entity id="compound-fence">
+
+  <!-- Front Fence FULL coverage - NO GAPS (overlapped design) -->
+  <a-box position="-20 1 20" width="20" height="2" depth="0.3" 
+         material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#8b5a2b; repeat: 8 2; roughness: 0.9; metalness: 0.1"></a-box>
+
+  <!-- Front Fence FULL coverage - NO GAPS (overlapped design) -->
+  <a-box position="20 1 20" width="20" height="2" depth="0.3" 
+         material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#8b5a2b; repeat: 8 2; roughness: 0.9; metalness: 0.1"></a-box>
+
+  <!-- Back Fence -->
+  <a-box position="0 1 -20" width="60" height="2" depth="0.3" 
+         material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#8b5a2b; repeat: 24 2; roughness: 0.9; metalness: 0.1"></a-box>
+
+  <!-- Left Fence -->
+  <a-box position="-30 1 0" width="0.3" height="2" depth="40" 
+         material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#8b5a2b; repeat: 16 2; roughness: 0.9; metalness: 0.1"></a-box>
+
+  <!-- Right Fence -->
+  <a-box position="30 1 0" width="0.3" height="2" depth="40" 
+         material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#8b5a2b; repeat: 16 2; roughness: 0.9; metalness: 0.1"></a-box>
+
+  <!-- GATE DOOR (overlay on full fence panels - swings outward) -->
+  <a-entity id="front-gate" position="0 1 20">
+    <!-- Left Gate Panel (overlaps fence completely) -->
+    <a-box position="-2.5 0 -0.05" width="5" height="2" depth="0.3" 
+           material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#8b5a2b; repeat: 2 2; roughness: 0.8; metalness: 0.2"
+           animation__open="property: rotation.y; to: 100; dur: 1200; easing: easeInOutSine; startEvents: gateopen;"
+           animation__close="property: rotation.y; to: 0; dur: 1200; easing: easeInOutSine; startEvents: gateclose;"></a-box>
+    
+    <!-- Right Gate Panel (overlaps fence completely) -->
+    <a-box position="2.5 0 -0.05" width="5" height="2" depth="0.3" 
+           material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#8b5a2b; repeat: 2 2; roughness: 0.8; metalness: 0.2"
+           animation__open="property: rotation.y; to: -100; dur: 1200; easing: easeInOutSine; startEvents: gateopen;"
+           animation__close="property: rotation.y; to: 0; dur: 1200; easing: easeInOutSine; startEvents: gateclose;"></a-box>
+    
+    <!-- Gate Handle (metallic detail) -->
+    <a-cylinder position="0 0.8 0.2" radius="0.06" height="0.12" 
+                material="color: #c0c0c0; metalness: 0.9; roughness: 0.1"></a-cylinder>
+  </a-entity>
+
+  <!-- HEAVY DOOR POSTS (structural framing) -->
+  <a-box position="-7 1.3 20.2" width="0.8" height="3" depth="0.8" 
+         material="color:#4a2f15; roughness:0.92"></a-box>
+  <a-box position="7 1.3 20.2" width="0.8" height="3" depth="0.8" 
+         material="color:#4a2f15; roughness:0.92"></a-box>
+
+  <!-- ALL ORIGINAL POSTS (unchanged) -->
+  <!-- Front Posts -->
+  <a-box position="-30 1.2 20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+  <a-box position="-15 1.2 20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+  <a-box position="15 1.2 20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+  <a-box position="30 1.2 20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+
+  <!-- Back Posts -->
+  <a-box position="-30 1.2 -20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+  <a-box position="-15 1.2 -20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+  <a-box position="0 1.2 -20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+  <a-box position="15 1.2 -20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+  <a-box position="30 1.2 -20" width="0.4" height="2.4" depth="0.4" material="color:#654321; roughness:0.95"></a-box>
+
+  <!-- Corner Posts -->
+  <a-box position="-30 1.2 20" width="0.5" height="2.5" depth="0.5" material="color:#5a3a1a; roughness:0.95"></a-box>
+  <a-box position="30 1.2 20" width="0.5" height="2.5" depth="0.5" material="color:#5a3a1a; roughness:0.95"></a-box>
+  <a-box position="-30 1.2 -20" width="0.5" height="2.5" depth="0.5" material="color:#5a3a1a; roughness:0.95"></a-box>
+  <a-box position="30 1.2 -20" width="0.5" height="2.5" depth="0.5" material="color:#5a3a1a; roughness:0.95"></a-box>
+
+</a-entity>
+
+<script>
+AFRAME.registerComponent('gate-controller', {
+  init: function () {
+    let isOpen = false;
+    this.el.addEventListener('click', () => {
+      const gate = document.querySelector('#front-gate');
+      if (!isOpen) {
+        gate.emit('gateopen');
+        isOpen = true;
+      } else {
+        gate.emit('gateclose');
+        isOpen = false;
+      }
+    });
+  }
+});
+document.querySelector('#front-gate').setAttribute('gate-controller', '');
+</script>
+
+
+     
+
+
+      <!-- ================= MAIN GATE WITH SWING DOORS ================= -->
+
+      <a-entity id="main-gate" position="0 0 20">
+
+        <!-- Left Gate Door (Swing Door) -->
+        <a-entity swing-door="side: left" class="interactable">
+          <a-box
+            position="-4 1 0"
+            width="8"
+            height="2"
+            depth="0.2"
+            material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#5b3a1a; repeat: 4 2; roughness: 0.9; metalness: 0.1"
+          ></a-box>
+        </a-entity>
+
+        <!-- Right Gate Door (Swing Door) -->
+        <a-entity swing-door="side: right" class="interactable">
+          <a-box
+            position="4 1 0"
+            width="8"
+            height="2"
+            depth="0.2"
+            material="src: url(https://cdn.aframe.io/a-painter/images/floor.jpg); color:#5b3a1a; repeat: 4 2; roughness: 0.9; metalness: 0.1"
+          ></a-box>
+        </a-entity>
+
+        <!-- Gate Posts -->
+      </a-entity>
+        <a-box position="-8 1.3 0" width="0.5" height="2.6" depth="0.5" 
+               material="color:#654321; roughness:0.95"></a-box>
+        <a-box position="8 1.3 0" width="0.5" height="2.6" depth="0.5" 
+               material="color:#654321; roughness:0.95"></a-box>
+
+      </a-entity>
+
+
+
+      <!-- ================= GLASS DOORS FOR HOUSE ENTRANCE ================= -->
+
+      <!-- CENTRAL GLASS DOOR (MAIN ENTRANCE) -->
+      <a-entity id="center-glass-door" position="0 0 8">
+        
+        <!-- Door Frame -->
+        <a-box position="0 2 0.05" width="4.1" height="4.1" depth="0.2" 
+               material="color: #374151; roughness: 0.6; metalness: 0.4"></a-box>
+        
+        <!-- LEFT GLASS DOOR PANEL (Swing Door) -->
+        <a-entity swing-door="side: left" class="interactable">
+          <a-box 
+            position="-1 2 0.15"  
+            width="1.9"
+            height="3.8"          
+            depth="0.1"            
+            material="color: #bfdbfe; opacity: 0.5; transparent: true; metalness: 0.8; roughness: 0.1">
+          </a-box>
+          
+          <!-- Frame grid -->
+          <a-box position="-1 2.5 0.2" width="1.9" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="-1 1.5 0.2" width="1.9" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <!-- Handle -->
+          <a-box position="-0.3 2 0.25"
+                 width="0.08"
+                 height="0.8"
+                 depth="0.08"
+                 material="color: #d4af37; metalness: 0.9; roughness: 0.2">
+          </a-box>
+        </a-entity>
+
+        <!-- RIGHT GLASS DOOR PANEL (Swing Door) -->
+        <a-entity swing-door="side: right" class="interactable">
+          <a-box 
+            position="1 2 0.15"   
+            width="1.9"        
+            height="3.8"
+            depth="0.1"
+            material="color: #bfdbfe; opacity: 0.5; transparent: true; metalness: 0.8; roughness: 0.1">
+          </a-box>
+
+          <!-- Frame grid -->
+          <a-box position="1 2.5 0.2" width="1.9" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="1 1.5 0.2" width="1.9" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <!-- Handle -->
+          <a-box position="0.3 2 0.25"
+                 width="0.08"
+                 height="0.8"
+                 depth="0.08"
+                 material="color: #d4af37; metalness: 0.9; roughness: 0.2">
+          </a-box>
+        </a-entity>
+
+      </a-entity>
+
+
+      <!-- INNER LEFT GLASS DOOR (Between center and left sliding door) -->
+      <a-entity id="inner-left-glass-door" position="-4 0 8">
+        
+        <!-- Door Frame -->
+        <a-box position="0 2 0.05" width="4.1" height="4.1" depth="0.2" 
+               material="color: #374151; roughness: 0.6; metalness: 0.4"></a-box>
+        
+        <!-- Glass Door Panel (Swing Door) -->
+        <a-entity swing-door="side: left" class="interactable">
+          <a-box 
+            position="0 2 0.15"  
+            width="3.8"
+            height="3.8"          
+            depth="0.1"            
+            material="color: #bfdbfe; opacity: 0.5; transparent: true; metalness: 0.8; roughness: 0.1">
+          </a-box>
+          
+          <!-- Frame grid -->
+          <a-box position="0 3 0.2" width="3.8" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 2 0.2" width="3.8" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 1 0.2" width="3.8" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <a-box position="-1 2 0.2" width="0.08" height="3.8" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="1 2 0.2" width="0.08" height="3.8" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <!-- Handle -->
+          <a-box position="1.5 2 0.25"
+                 width="0.08"
+                 height="0.8"
+                 depth="0.08"
+                 material="color: #d4af37; metalness: 0.9; roughness: 0.2">
+          </a-box>
+        </a-entity>
+
+      </a-entity>
+
+      <!-- INNER RIGHT GLASS DOOR (Between center and right sliding door) -->
+      <a-entity id="inner-right-glass-door" position="4 0 8">
+        
+        <!-- Door Frame -->
+        <a-box position="0 2 0.05" width="4.1" height="4.1" depth="0.2" 
+               material="color: #374151; roughness: 0.6; metalness: 0.4"></a-box>
+        
+        <!-- Glass Door Panel (Swing Door) -->
+        <a-entity swing-door="side: right" class="interactable">
+          <a-box 
+            position="0 2 0.15"  
+            width="3.8"
+            height="3.8"          
+            depth="0.1"            
+            material="color: #bfdbfe; opacity: 0.5; transparent: true; metalness: 0.8; roughness: 0.1">
+          </a-box>
+          
+          <!-- Frame grid -->
+          <a-box position="0 3 0.2" width="3.8" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 2 0.2" width="3.8" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 1 0.2" width="3.8" height="0.08" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <a-box position="-1 2 0.2" width="0.08" height="3.8" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="1 2 0.2" width="0.08" height="3.8" depth="0.12" 
+                 material="color: #1f2937; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <!-- Handle -->
+          <a-box position="-1.5 2 0.25"
+                 width="0.08"
+                 height="0.8"
+                 depth="0.08"
+                 material="color: #d4af37; metalness: 0.9; roughness: 0.2">
+          </a-box>
+        </a-entity>
+
+      </a-entity>
+
+
+      <!-- LEFT SLIDING GLASS DOOR (properly fills the opening) -->
+      <a-entity id="left-sliding-door" position="-8 0 8">
+        
+        <!-- Door Frame (fills the entire wall opening) -->
+        <a-box position="0 2 0.05" width="6.1" height="4.1" depth="0.2" 
+               material="color: #4b5563; roughness: 0.6; metalness: 0.4"></a-box>
+        
+        <!-- Glass Door Panel (clickable to slide) -->
+        <a-entity sliding-door="direction: left; distance: 3" class="interactable">
+          <a-box 
+            position="0 2 0.15"  
+            width="5.6"
+            height="3.6"          
+            depth="0.1"            
+            material="color: #bfdbfe; opacity: 0.4; transparent: true; metalness: 0.8; roughness: 0.1">
+          </a-box>
+
+          <!-- Door Frame Grid (modern design) -->
+          <!-- Vertical dividers -->
+          <a-box position="-1.85 2 0.2" width="0.1" height="3.6" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 2 0.2" width="0.1" height="3.6" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="1.85 2 0.2" width="0.1" height="3.6" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <!-- Horizontal dividers -->
+          <a-box position="0 3 0.2" width="5.6" height="0.1" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 2 0.2" width="5.6" height="0.1" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 1 0.2" width="5.6" height="0.1" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+
+          <!-- Vertical Handle (gold) -->
+          <a-box position="2.2 2 0.25"
+                 width="0.12"
+                 height="1.4"
+                 depth="0.1"
+                 material="color: #d4af37; metalness: 0.9; roughness: 0.2">
+          </a-box>
+        </a-entity>
+
+      </a-entity>
+
+
+      <!-- RIGHT SLIDING GLASS DOOR (properly fills the opening) -->
+      <a-entity id="right-sliding-door" position="8 0 8">
+
+        <!-- Door Frame (fills the entire wall opening) -->
+        <a-box position="0 2 0.05" width="6.1" height="4.1" depth="0.2" 
+               material="color: #4b5563; roughness: 0.6; metalness: 0.4"></a-box>
+        
+        <!-- Glass Door Panel (clickable to slide) -->
+        <a-entity sliding-door="direction: right; distance: 3" class="interactable">
+          <a-box 
+            position="0 2 0.15"   
+            width="5.6"        
+            height="3.6"
+            depth="0.1"
+            material="color: #bfdbfe; opacity: 0.4; transparent: true; metalness: 0.8; roughness: 0.1">
+          </a-box>
+
+          <!-- Door Frame Grid (modern design) -->
+          <!-- Vertical dividers -->
+          <a-box position="-1.85 2 0.2" width="0.1" height="3.6" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 2 0.2" width="0.1" height="3.6" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="1.85 2 0.2" width="0.1" height="3.6" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          
+          <!-- Horizontal dividers -->
+          <a-box position="0 3 0.2" width="5.6" height="0.1" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 2 0.2" width="5.6" height="0.1" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+          <a-box position="0 1 0.2" width="5.6" height="0.1" depth="0.12" 
+                 material="color: #374151; roughness: 0.5; metalness: 0.5"></a-box>
+
+          <!-- Vertical Handle (gold) -->
+          <a-box position="-2.2 2 0.25"
+                 width="0.12"
+                 height="1.4"
+                 depth="0.1"
+                 material="color: #d4af37; metalness: 0.9; roughness: 0.2">
+          </a-box>
+        </a-entity>
+
+      </a-entity>
+
+    </a-scene>
+  </body>
+</html>
